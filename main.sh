@@ -31,7 +31,7 @@ function addToBasketIfLowerThen() {
 # =======================
 # list of items to automatically order with a minimum ammount to maintain
 
-addToBasketIfLowerThen shitpaper 15
+addToBasketIfLowerThen shitpaper 17
 addToBasketIfLowerThen beer 12
 
 
