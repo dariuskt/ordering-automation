@@ -58,7 +58,7 @@ function login() {
 		--cookie-jar "$cookies_file" \
 		-H "Content-Type: application/json" \
 		-d "{'rememberMe':true,'email':'$email','password':'$password'}" \
-		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/user/login" \
+		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/userAuth/login" \
 		>/dev/null
 
 	if fgrep -q '.BRBAUTH' $cookies_file; then
