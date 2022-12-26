@@ -108,16 +108,14 @@ function getCartJson() {
 	curl -sSL -X GET \
 		--cookie "$cookies_file" \
 		--cookie-jar "$cookies_file" \
-		"https://barbora.lt" \
-		| fgrep 'window.b_cart' \
-		| grep -o "{.*}"
+		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/cart"
 }
 
 function isItemInCart() {
 	log "($1)"
 	local item_id=$1
 
-	local items="$(getCartJson | jq --raw-output '.slices[].products[].id' )"
+	local items="$(getCartJson | jq --raw-output '.cart.slices[].products[].id' )"
 
 	echo "$items" | grep -q "^$item_id$" && echo true || echo false
 }
