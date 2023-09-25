@@ -54,7 +54,7 @@ function addToBasketIfLowerThen() {
 addToBasketIfLowerThenLegacy shitpaper 17
 addToBasketIfLowerThenLegacy beer 12
 
-addToBasketIfLowerThen napkins 4
+addToBasketIfLowerThen napkins 5
 addToBasketIfLowerThen cotton-buds 4
 addToBasketIfLowerThen cotton-pads 3
 
