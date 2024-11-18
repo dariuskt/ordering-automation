@@ -16,6 +16,7 @@
 : "${password:=myPassword}"
 template_name="${1:-myTemplate}"
 quantity="${2:-1}"
+unit="${3:-packs}"
 
 # ====================================
 
@@ -96,9 +97,26 @@ function getTemplateItemsByName() {
 		--cookie "$cookies_file" \
 		--cookie-jar "$cookies_file" \
 		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/cart/getsinglebasket?basketId=$template_id" \
+		| jq --raw-output '[.slices[].products[] | {id, status, comparative_unit_price, price}] | sort_by(.comparative_unit_price)[] | .id' \
+		)"
+	log "got $(echo "$items" | wc -l) items"
+	echo "$items"
+}
+
+function getActiveTemplateItemsByName() {
+	log "($1)"
+	local template_name="$1"
+
+	local template_id="$(getTemplateIdByName "$template_name")"
+
+	# returns only active itmes sorted by unit price, lowest first.
+	local items="$(curl -sSL -X GET \
+		--cookie "$cookies_file" \
+		--cookie-jar "$cookies_file" \
+		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/cart/getsinglebasket?basketId=$template_id" \
 		| jq --raw-output '[.slices[].products[] | select(.status == "active") | {id, status, comparative_unit_price, price}] | sort_by(.comparative_unit_price)[] | .id' \
 		)"
-	log "got $(echo "$items" | wc -l) items with cheapest id $(echo "$items" | head -n1)"
+	log "got $(echo "$items" | wc -l) active items with cheapest id $(echo "$items" | head -n1)"
 	echo "$items"
 }
 
@@ -151,7 +169,7 @@ function addItemToCart() {
 		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/cart/item?returnCartInfo=false" \
 		)"
 
-	if [ $(echo "$resp" | jq '.success') = "true" ]; then
+	if [ "$(echo "$resp" | jq '.success')" = "true" ]; then
 		return "$quantity"
 	else
 		log "ERROR: failed to add item"
@@ -160,22 +178,50 @@ function addItemToCart() {
 	fi
 }
 
+function deleteItemFromCart() {
+	log "($1)"
+	local item_id=$1
+	local resp="$(curl -sSL -X DELETE \
+		--cookie "$cookies_file" \
+		--cookie-jar "$cookies_file" \
+		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/cart/item?returnCartInfo=false&id=$item_id" \
+		)"
+
+	if [ $(echo "$resp" | jq '.success') != "true" ]; then
+		log "ERROR: failed to delete item"
+		log "Response from server: $resp"
+	fi
+
+}
+
+
 # =================================
 
 
 login "$email" "$password"
 
-item=$(getTemplateItemsByName "$template_name" | head -n1)
+item=$(getActiveTemplateItemsByName "$template_name" | head -n1)
+items=$(getTemplateItemsByName "$template_name")
+
 
 if [ $(isItemInCart "$item") == "true" ] ; then
-	echo "Nothing to do, item already in the cart"
+	deleteItemFromCart "$item"
 else
+	for i in $items ; do
+		deleteItemFromCart "$i"
+	done
+fi
+
+if [ "$unit" == "units" ] ; then
 	pack_size="$(getItemPackSize $item $template_name)"
-	if [ "$quantity" -lt "$pack_size" ] ; then
-		echo "Nothing to do, pack($pack_size) too big for requested quantity($quantity)"
-	else
-		addItemToCart "$(echo "$item")" "$((quantity/pack_size))"
-		echo "Added $? packs of $template_name"
-	fi
+else
+	pack_size=1
+fi
+
+if [ "$quantity" -lt "$pack_size" ] ; then
+	echo "Nothing to do, pack($pack_size) too big for requested quantity($quantity)"
+else
+	addItemToCart "$(echo "$item")" "$((quantity/pack_size))"
+	echo "Added $? packs of $template_name"
 fi
 
