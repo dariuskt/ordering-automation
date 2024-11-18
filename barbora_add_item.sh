@@ -32,7 +32,7 @@ function die() {
 }
 function log() {
 	if $debug ; then
-		echo "${FUNCNAME[1]} $1" >&2
+		echo ">> ${FUNCNAME[1]} $1" >&2
 	fi
 }
 
@@ -102,9 +102,26 @@ function getTemplateItemsByName() {
 	echo "$items"
 }
 
+function getItemPackSize() {
+	log "($1 $2)"
+	local item_id=$1
+	local template_name="$2"
+
+	local template_id="$(getTemplateIdByName "$template_name")"
+
+	local pack_size="$(curl -sSL -X GET \
+		--cookie "$cookies_file" \
+		--cookie-jar "$cookies_file" \
+		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/cart/getsinglebasket?basketId=$template_id" \
+		| jq --raw-output '[.slices[].products[] | select(.id == "'$item_id'") | {id, status, comparative_unit_price, price}] | sort_by(.comparative_unit_price)[] | (.price/.comparative_unit_price)+0.5|floor' \
+		)"
+	log "got pack size: $pack_size"
+	echo "$pack_size"
+
+}
+
 function getCartJson() {
-	log "($1)"
-	item_id=$1
+	log
 	curl -sSL -X GET \
 		--cookie "$cookies_file" \
 		--cookie-jar "$cookies_file" \
@@ -134,9 +151,12 @@ function addItemToCart() {
 		"https://apikey:SecretKey@barbora.lt/api/eshop/v1/cart/item?returnCartInfo=false" \
 		)"
 
-	if [ $(echo "$resp" | jq '.success') != "true" ]; then
+	if [ $(echo "$resp" | jq '.success') = "true" ]; then
+		return "$quantity"
+	else
 		log "ERROR: failed to add item"
 		log "Response from server: $resp"
+		return 0
 	fi
 }
 
@@ -150,6 +170,12 @@ item=$(getTemplateItemsByName "$template_name" | head -n1)
 if [ $(isItemInCart "$item") == "true" ] ; then
 	echo "Nothing to do, item already in the cart"
 else
-	addItemToCart "$(echo "$item")" "$quantity"
+	pack_size="$(getItemPackSize $item $template_name)"
+	if [ "$quantity" -lt "$pack_size" ] ; then
+		echo "Nothing to do, pack($pack_size) too big for requested quantity($quantity)"
+	else
+		addItemToCart "$(echo "$item")" "$((quantity/pack_size))"
+		echo "Added $? packs of $template_name"
+	fi
 fi
 
